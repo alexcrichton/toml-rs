@@ -199,6 +199,7 @@ pub struct Serializer<'a> {
     dst: &'a mut String,
     state: State<'a>,
     settings: Rc<Settings>,
+    initial_len: usize,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -249,10 +250,12 @@ impl<'a> Serializer<'a> {
     /// The serializer can then be used to serialize a type after which the data
     /// will be present in `dst`.
     pub fn new(dst: &'a mut String) -> Serializer<'a> {
+        let initial_len = dst.len();
         Serializer {
             dst,
             state: State::End,
             settings: Rc::new(Settings::default()),
+            initial_len,
         }
     }
 
@@ -265,6 +268,7 @@ impl<'a> Serializer<'a> {
     /// - pretty arrays: each item in arrays will be on a newline, have an indentation of 4 and
     ///   have a trailing comma. See `Serializer::pretty_array`
     pub fn pretty(dst: &'a mut String) -> Serializer<'a> {
+        let initial_len = dst.len();
         Serializer {
             dst,
             state: State::End,
@@ -272,6 +276,7 @@ impl<'a> Serializer<'a> {
                 array: Some(ArraySettings::pretty()),
                 string: Some(StringSettings::pretty()),
             }),
+            initial_len,
         }
     }
 
@@ -695,14 +700,14 @@ impl<'a> Serializer<'a> {
 
         match *state {
             State::Table { first, .. } => {
-                if !first.get() {
+                if !first.get() || self.dst.len() != self.initial_len {
                     // Newline if we are a table that is not the first
                     // table in the document.
                     self.dst.push('\n');
                 }
             }
             State::Array { parent, first, .. } => {
-                if !first.get() {
+                if !first.get() || self.dst.len() != self.initial_len {
                     // Always newline if we are not the first item in the
                     // table-array
                     self.dst.push('\n');
@@ -989,6 +994,7 @@ impl<'a, 'b> ser::SerializeSeq for SerializeSeq<'a, 'b> {
                 len: self.len,
             },
             settings: self.ser.settings.clone(),
+            initial_len: self.ser.initial_len,
         })?;
         self.first.set(false);
         Ok(())
@@ -1109,6 +1115,7 @@ impl<'a, 'b> ser::SerializeMap for SerializeTable<'a, 'b> {
                         table_emitted,
                     },
                     settings: ser.settings.clone(),
+                    initial_len: ser.initial_len,
                 });
                 match res {
                     Ok(()) => first.set(false),
@@ -1165,6 +1172,7 @@ impl<'a, 'b> ser::SerializeStruct for SerializeTable<'a, 'b> {
                         table_emitted,
                     },
                     settings: ser.settings.clone(),
+                    initial_len: ser.initial_len,
                 });
                 match res {
                     Ok(()) => first.set(false),
